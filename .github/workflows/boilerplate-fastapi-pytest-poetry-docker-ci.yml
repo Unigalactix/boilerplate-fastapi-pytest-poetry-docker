@@ -32,9 +32,6 @@ jobs:
       - name: Install dependencies
         run: poetry install --with dev
       
-      - name: Build
-        run: poetry install --without dev
-      
       - name: Test
         run: poetry run pytest --cov-report term-missing --cov=./app tests
 
