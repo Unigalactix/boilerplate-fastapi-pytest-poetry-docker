@@ -31,6 +31,17 @@ jobs:
       
       - name: Test
         run: poetry run pytest
+      
+      - name: Notify Build Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Build and Test job completed successfully"
+            echo "BUILD_STATUS=success" >> $GITHUB_ENV
+          else
+            echo "❌ Build and Test job failed"
+            echo "BUILD_STATUS=failure" >> $GITHUB_ENV
+          fi
 
 
   security-scan:
@@ -49,6 +60,17 @@ jobs:
         uses: github/codeql-action/autobuild@v3
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+      
+      - name: Notify Security Scan Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Security scan completed successfully"
+            echo "SECURITY_STATUS=success" >> $GITHUB_ENV
+          else
+            echo "❌ Security scan failed"
+            echo "SECURITY_STATUS=failure" >> $GITHUB_ENV
+          fi
 
 
   docker-build:
@@ -73,7 +95,17 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.REPO_LOWER }}:latest,${{ secrets.ACR_LOGIN_SERVER }}/${{ env.REPO_LOWER }}:${{ github.sha }}
-            
+      
+      - name: Notify Docker Build Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Docker build and push completed successfully"
+            echo "DOCKER_STATUS=success" >> $GITHUB_ENV
+          else
+            echo "❌ Docker build and push failed"
+            echo "DOCKER_STATUS=failure" >> $GITHUB_ENV
+          fi
 
 
   deploy:
@@ -92,3 +124,118 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: .
           slot-name: production
+      
+      - name: Notify Deployment Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment completed successfully"
+            echo "DEPLOY_STATUS=success" >> $GITHUB_ENV
+          else
+            echo "❌ Deployment failed"
+            echo "DEPLOY_STATUS=failure" >> $GITHUB_ENV
+          fi
+
+  # Pipeline Health Monitoring Job
+  monitor-pipeline:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [build, security-scan, docker-build, deploy]
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check Pipeline Status
+        id: status
+        run: |
+          BUILD_STATUS="${{ needs.build.result }}"
+          SECURITY_STATUS="${{ needs.security-scan.result }}"
+          DOCKER_STATUS="${{ needs.docker-build.result }}"
+          DEPLOY_STATUS="${{ needs.deploy.result }}"
+          
+          echo "build_status=$BUILD_STATUS" >> $GITHUB_OUTPUT
+          echo "security_status=$SECURITY_STATUS" >> $GITHUB_OUTPUT
+          echo "docker_status=$DOCKER_STATUS" >> $GITHUB_OUTPUT
+          echo "deploy_status=$DEPLOY_STATUS" >> $GITHUB_OUTPUT
+          
+          # Determine overall status
+          if [[ "$BUILD_STATUS" == "failure" ]] || [[ "$SECURITY_STATUS" == "failure" ]] || [[ "$DOCKER_STATUS" == "failure" ]] || [[ "$DEPLOY_STATUS" == "failure" ]]; then
+            echo "overall_status=failure" >> $GITHUB_OUTPUT
+            echo "PIPELINE_FAILED=true" >> $GITHUB_ENV
+          else
+            echo "overall_status=success" >> $GITHUB_OUTPUT
+            echo "PIPELINE_FAILED=false" >> $GITHUB_ENV
+          fi
+      
+      - name: Generate Pipeline Report
+        run: |
+          echo "## 📊 CI/CD Pipeline Health Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Status Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Build status
+          if [ "${{ steps.status.outputs.build_status }}" == "success" ]; then
+            echo "✅ **Build & Test:** Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Build & Test:** Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Security status
+          if [ "${{ steps.status.outputs.security_status }}" == "success" ]; then
+            echo "✅ **Security Scan:** Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Security Scan:** Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Docker status
+          if [ "${{ steps.status.outputs.docker_status }}" == "success" ] || [ "${{ steps.status.outputs.docker_status }}" == "skipped" ]; then
+            echo "✅ **Docker Build:** Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Docker Build:** Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Deploy status
+          if [ "${{ steps.status.outputs.deploy_status }}" == "success" ] || [ "${{ steps.status.outputs.deploy_status }}" == "skipped" ]; then
+            echo "✅ **Deployment:** Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Deployment:** Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.status.outputs.overall_status }}" == "success" ]; then
+            echo "### 🎉 Overall Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 🚨 Overall Status: FAILURE" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Notify on Failure
+        if: steps.status.outputs.overall_status == 'failure'
+        run: |
+          echo "🚨 CI/CD Pipeline Failed!"
+          echo "Pipeline run ${{ github.run_number }} has failed."
+          echo "Please check the logs at: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
+          echo "Failed Jobs:"
+          [ "${{ steps.status.outputs.build_status }}" == "failure" ] && echo "  - Build & Test"
+          [ "${{ steps.status.outputs.security_status }}" == "failure" ] && echo "  - Security Scan"
+          [ "${{ steps.status.outputs.docker_status }}" == "failure" ] && echo "  - Docker Build"
+          [ "${{ steps.status.outputs.deploy_status }}" == "failure" ] && echo "  - Deployment"
+      
+      - name: Success Rate Tracking
+        if: always()
+        run: |
+          echo "📈 Pipeline Success Rate Tracking" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This run: ${{ steps.status.outputs.overall_status }}" >> $GITHUB_STEP_SUMMARY
+          echo "Run ID: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "Run Number: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **Tip:** Track success rates using GitHub Actions insights at:" >> $GITHUB_STEP_SUMMARY
+          echo "${{ github.server_url }}/${{ github.repository }}/actions" >> $GITHUB_STEP_SUMMARY
