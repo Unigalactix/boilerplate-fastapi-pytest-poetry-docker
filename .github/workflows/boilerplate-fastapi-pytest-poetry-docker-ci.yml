@@ -232,17 +232,17 @@ jobs:
           echo "Please check the logs at: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo ""
           echo "Failed Jobs:"
-          if [ "${{ steps.status.outputs.build_status }}" == "failure" ]; then
-            echo "  - Build & Test"
+          if [ "${{ steps.status.outputs.build_status }}" == "failure" ] || [ "${{ steps.status.outputs.build_status }}" == "cancelled" ]; then
+            echo "  - Build & Test (${{ steps.status.outputs.build_status }})"
           fi
-          if [ "${{ steps.status.outputs.security_status }}" == "failure" ]; then
-            echo "  - Security Scan"
+          if [ "${{ steps.status.outputs.security_status }}" == "failure" ] || [ "${{ steps.status.outputs.security_status }}" == "cancelled" ]; then
+            echo "  - Security Scan (${{ steps.status.outputs.security_status }})"
           fi
-          if [ "${{ steps.status.outputs.docker_status }}" == "failure" ]; then
-            echo "  - Docker Build"
+          if [ "${{ steps.status.outputs.docker_status }}" == "failure" ] || [ "${{ steps.status.outputs.docker_status }}" == "cancelled" ]; then
+            echo "  - Docker Build (${{ steps.status.outputs.docker_status }})"
           fi
-          if [ "${{ steps.status.outputs.deploy_status }}" == "failure" ]; then
-            echo "  - Deployment"
+          if [ "${{ steps.status.outputs.deploy_status }}" == "failure" ] || [ "${{ steps.status.outputs.deploy_status }}" == "cancelled" ]; then
+            echo "  - Deployment (${{ steps.status.outputs.deploy_status }})"
           fi
       
       - name: Success Rate Tracking
