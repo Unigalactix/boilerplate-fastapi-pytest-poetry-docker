@@ -37,10 +37,8 @@ jobs:
         run: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ Build and Test job completed successfully"
-            echo "BUILD_STATUS=success" >> $GITHUB_ENV
           else
             echo "❌ Build and Test job failed"
-            echo "BUILD_STATUS=failure" >> $GITHUB_ENV
           fi
 
 
@@ -66,10 +64,8 @@ jobs:
         run: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ Security scan completed successfully"
-            echo "SECURITY_STATUS=success" >> $GITHUB_ENV
           else
             echo "❌ Security scan failed"
-            echo "SECURITY_STATUS=failure" >> $GITHUB_ENV
           fi
 
 
@@ -101,10 +97,8 @@ jobs:
         run: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ Docker build and push completed successfully"
-            echo "DOCKER_STATUS=success" >> $GITHUB_ENV
           else
             echo "❌ Docker build and push failed"
-            echo "DOCKER_STATUS=failure" >> $GITHUB_ENV
           fi
 
 
@@ -130,10 +124,8 @@ jobs:
         run: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ Deployment completed successfully"
-            echo "DEPLOY_STATUS=success" >> $GITHUB_ENV
           else
             echo "❌ Deployment failed"
-            echo "DEPLOY_STATUS=failure" >> $GITHUB_ENV
           fi
 
   # Pipeline Health Monitoring Job
@@ -158,13 +150,14 @@ jobs:
           echo "docker_status=$DOCKER_STATUS" >> $GITHUB_OUTPUT
           echo "deploy_status=$DEPLOY_STATUS" >> $GITHUB_OUTPUT
           
-          # Determine overall status
-          if [[ "$BUILD_STATUS" == "failure" ]] || [[ "$SECURITY_STATUS" == "failure" ]] || [[ "$DOCKER_STATUS" == "failure" ]] || [[ "$DEPLOY_STATUS" == "failure" ]]; then
+          # Determine overall status - fail if any required job failed or was cancelled
+          if [[ "$BUILD_STATUS" == "failure" ]] || [[ "$BUILD_STATUS" == "cancelled" ]] || \
+             [[ "$SECURITY_STATUS" == "failure" ]] || [[ "$SECURITY_STATUS" == "cancelled" ]] || \
+             [[ "$DOCKER_STATUS" == "failure" ]] || [[ "$DOCKER_STATUS" == "cancelled" ]] || \
+             [[ "$DEPLOY_STATUS" == "failure" ]] || [[ "$DEPLOY_STATUS" == "cancelled" ]]; then
             echo "overall_status=failure" >> $GITHUB_OUTPUT
-            echo "PIPELINE_FAILED=true" >> $GITHUB_ENV
           else
             echo "overall_status=success" >> $GITHUB_OUTPUT
-            echo "PIPELINE_FAILED=false" >> $GITHUB_ENV
           fi
       
       - name: Generate Pipeline Report
@@ -183,6 +176,10 @@ jobs:
           # Build status
           if [ "${{ steps.status.outputs.build_status }}" == "success" ]; then
             echo "✅ **Build & Test:** Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.status.outputs.build_status }}" == "skipped" ]; then
+            echo "⏭️ **Build & Test:** Skipped" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.status.outputs.build_status }}" == "cancelled" ]; then
+            echo "🚫 **Build & Test:** Cancelled" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Build & Test:** Failed" >> $GITHUB_STEP_SUMMARY
           fi
@@ -190,20 +187,32 @@ jobs:
           # Security status
           if [ "${{ steps.status.outputs.security_status }}" == "success" ]; then
             echo "✅ **Security Scan:** Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.status.outputs.security_status }}" == "skipped" ]; then
+            echo "⏭️ **Security Scan:** Skipped" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.status.outputs.security_status }}" == "cancelled" ]; then
+            echo "🚫 **Security Scan:** Cancelled" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Security Scan:** Failed" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Docker status
-          if [ "${{ steps.status.outputs.docker_status }}" == "success" ] || [ "${{ steps.status.outputs.docker_status }}" == "skipped" ]; then
+          if [ "${{ steps.status.outputs.docker_status }}" == "success" ]; then
             echo "✅ **Docker Build:** Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.status.outputs.docker_status }}" == "skipped" ]; then
+            echo "⏭️ **Docker Build:** Skipped" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.status.outputs.docker_status }}" == "cancelled" ]; then
+            echo "🚫 **Docker Build:** Cancelled" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Docker Build:** Failed" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Deploy status
-          if [ "${{ steps.status.outputs.deploy_status }}" == "success" ] || [ "${{ steps.status.outputs.deploy_status }}" == "skipped" ]; then
+          if [ "${{ steps.status.outputs.deploy_status }}" == "success" ]; then
             echo "✅ **Deployment:** Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.status.outputs.deploy_status }}" == "skipped" ]; then
+            echo "⏭️ **Deployment:** Skipped" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.status.outputs.deploy_status }}" == "cancelled" ]; then
+            echo "🚫 **Deployment:** Cancelled" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Deployment:** Failed" >> $GITHUB_STEP_SUMMARY
           fi
@@ -223,10 +232,18 @@ jobs:
           echo "Please check the logs at: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo ""
           echo "Failed Jobs:"
-          [ "${{ steps.status.outputs.build_status }}" == "failure" ] && echo "  - Build & Test"
-          [ "${{ steps.status.outputs.security_status }}" == "failure" ] && echo "  - Security Scan"
-          [ "${{ steps.status.outputs.docker_status }}" == "failure" ] && echo "  - Docker Build"
-          [ "${{ steps.status.outputs.deploy_status }}" == "failure" ] && echo "  - Deployment"
+          if [ "${{ steps.status.outputs.build_status }}" == "failure" ]; then
+            echo "  - Build & Test"
+          fi
+          if [ "${{ steps.status.outputs.security_status }}" == "failure" ]; then
+            echo "  - Security Scan"
+          fi
+          if [ "${{ steps.status.outputs.docker_status }}" == "failure" ]; then
+            echo "  - Docker Build"
+          fi
+          if [ "${{ steps.status.outputs.deploy_status }}" == "failure" ]; then
+            echo "  - Deployment"
+          fi
       
       - name: Success Rate Tracking
         if: always()
