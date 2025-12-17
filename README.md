@@ -91,6 +91,62 @@ Execute all tests with coverage report.
 poetry run pytest --cov-report term-missing --cov=./app tests
 ```
 
+### Code Quality
+
+This project uses Black for code formatting and Ruff for linting to maintain consistent code style.
+
+#### Run Code Formatting
+
+Format all Python code with Black:
+
+```sh
+poetry run black app tests
+```
+
+Check formatting without making changes:
+
+```sh
+poetry run black --check app tests
+```
+
+#### Run Linting
+
+Lint code with Ruff:
+
+```sh
+poetry run ruff check app tests
+```
+
+Auto-fix linting issues:
+
+```sh
+poetry run ruff check app tests --fix
+```
+
+#### Pre-commit Hooks
+
+Install pre-commit hooks to automatically check code quality before commits:
+
+```sh
+poetry run pre-commit install
+```
+
+Run pre-commit checks manually:
+
+```sh
+poetry run pre-commit run --all-files
+```
+
+#### Code Style Guidelines
+
+- **Line Length**: Maximum 88 characters (Black default)
+- **Import Sorting**: Imports are automatically sorted by Ruff
+- **Python Version**: Target Python 3.11+
+- **Formatting**: Follow Black's opinionated style
+- **Linting**: Address all Ruff warnings before committing
+
+All code must pass both Black formatting and Ruff linting checks before being merged.
+
 ### Dockerization
 
 Build the Docker image.
@@ -143,7 +199,7 @@ package-mode = false
 Add dependencies that are only needed for test and development.
 
 ```sh
-poetry add pytest pytest-cov ipykernel --group dev
+poetry add pytest pytest-cov ipykernel black ruff pre-commit --group dev
 ```
 
 #### Install Project Dependencies

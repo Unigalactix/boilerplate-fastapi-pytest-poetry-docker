@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, FastAPI
 
 from app.config import settings
-from app.dependencies import get_query_token, get_token_header
+from app.dependencies import get_query_token
 from app.routers import items, users
-
 
 # Instantiate entry point
 app = FastAPI(
@@ -18,6 +17,7 @@ api_router.include_router(items.router)
 api_router.include_router(users.router)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
 
 @app.get("/")
 async def root():
