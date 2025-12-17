@@ -9,6 +9,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -18,18 +20,14 @@ jobs:
           python-version: '3.11'
       
       - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: true
       
       - name: Install dependencies
-        run: poetry install
-      
-      - name: Run Black formatting check
-        run: poetry run black --check app/ tests/
-      
-      - name: Run Ruff linting
-        run: poetry run ruff check app/ tests/
+        run: poetry install --with dev
       
       - name: Test
         run: poetry run pytest
@@ -75,6 +73,7 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.REPO_LOWER }}:latest,${{ secrets.ACR_LOGIN_SERVER }}/${{ env.REPO_LOWER }}:${{ github.sha }}
+            
 
 
   deploy:
@@ -85,11 +84,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          app-name: 'mvdemoapp'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: .
+          slot-name: production
