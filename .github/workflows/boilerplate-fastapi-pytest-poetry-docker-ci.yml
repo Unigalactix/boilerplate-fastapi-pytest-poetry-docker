@@ -54,6 +54,7 @@ jobs:
 
   # JOB 3: CONTAINERIZATION (Conditional)
   docker-build:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     needs: [build, security-scan]
     permissions:
@@ -77,8 +78,9 @@ jobs:
 
   # JOB 4: DEPLOYMENT (Conditional)
   deploy:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    needs: [build, security-scan]
+    needs: [build, security-scan, docker-build]
     environment: Production
     steps:
     - uses: actions/checkout@v4
